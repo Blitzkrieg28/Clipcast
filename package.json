@@ -1,0 +1,29 @@
+{
+  "name": "clipcast",
+  "version": "1.0.0",
+  "description": "a browser extension to clip and download yt videos",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "nodejs",
+    "express",
+    "redis",
+    "pub-sub",
+    "bullmq",
+    "yt-dlp",
+    "extension"
+  ],
+  "author": "blitzkrieg28",
+  "license": "ISC",
+  "dependencies": {
+    "bullmq": "^5.61.2",
+    "cloudinary": "^2.8.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "ioredis": "^5.8.2",
+    "socket.io": "^4.8.1"
+  }
+}
