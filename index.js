@@ -60,9 +60,7 @@ app.post('/api/clips' ,async (req,res)=>{
             message: 'failed to queue clip job'
         });
     }
-    res.status(202).send({
-        message: 'clip job accepted'
-    });
+    
 });
 
 httpServer.listen(PORT, ()=>{

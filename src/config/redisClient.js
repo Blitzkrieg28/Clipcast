@@ -2,7 +2,7 @@ import Redis from "ioredis";
 import 'dotenv/config';
 
 const connectionOpt= {
-    maxRetiries: null
+    maxRetriesPerRequest: null
    
 };
 
