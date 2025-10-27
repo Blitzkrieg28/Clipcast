@@ -117,4 +117,9 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
+
+#some video files
+*.mp4
+*.webm
+*.part 
 # End of https://mrkandreev.name/snippets/gitignore-generator/#Node
