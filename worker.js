@@ -12,10 +12,8 @@ cloudinary.v2.config({
     api_secret: process.env.CLOUDINARY_API_SECRET,
     secure: true,
 });
-// Add these logs to verify:
 console.log("Cloudinary Config - Cloud Name:", process.env.CLOUDINARY_CLOUD_NAME ? 'Loaded' : 'MISSING!');
 console.log("Cloudinary Config - API Key:", process.env.CLOUDINARY_API_KEY ? 'Loaded' : 'MISSING!');
-// Don't log the secret itself, just check if it exists
 console.log("Cloudinary Config - API Secret:", process.env.CLOUDINARY_API_SECRET ? 'Loaded' : 'MISSING!');
 
 const QUEUE_NAME= 'video-clipping';
@@ -32,7 +30,7 @@ const processjob =async (job)=>{
         throw new Error("Missing essential job data (videoUrl, startTime, endTime, userId)");
     }
     try{
-    const command= `yt-dlp --download-sections "*${startTime}-${endTime}" --remux-video mp4 -o "${tempFilename}" "${videoURL}"`;
+    const command= `yt-dlp -f "best[height<=480]" --download-sections "*${startTime}-${endTime}" --remux-video mp4 -o "${tempFilename}" "${videoURL}"`;
     console.log(`Executing command for job ${job.id}: ${command}`);
     await new Promise((resolve,reject)=>{
         exec(command,(error,stdout,stderr)=>{
