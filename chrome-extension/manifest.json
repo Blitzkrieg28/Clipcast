@@ -4,27 +4,35 @@
     "version": "1.0",
     "description": "an extension to download a clip from youtube videos.",
     "permissions": [
-        "activeTab",
-        "scripting",
-        "notifications"
+      "activeTab",
+      "scripting",
+      "notifications",
+      "storage"
+      
     ],
+    "host_permissions": [
+    "http://localhost:3000/",
+    "http://127.0.0.1:3000/",
+    "http://localhost.chrome.com:3000/"
+  ],
     "background": {
-        "service_worker": "background.js"
+      "service_worker": "background.js",
+      "type": "module"
     },
     "content_scripts": [
-        {
-            "matches": ["https://www.youtube.com/*"],
-            "js": ["content.js"]
-        }
+      {
+        "matches": ["https://www.youtube.com/*"],
+        "js": ["content.js"]
+      }
     ],
     "action": {
-        "default_popup": "popup.html",
-        "default_icon": {
-            "16": "images/icon16.png"
-        },
-        "icons": {
-           "48": "images/icon48.png",
-           "128": "images/icon128.png" 
-        }
+      "default_popup": "popup.html",
+      "default_icon": {
+        "16": "images/icon16.png"
+      }
+    },
+    "icons": { 
+       "48": "images/icon16.png",
+       "128": "images/icon16.png"
     }
-}
+  }

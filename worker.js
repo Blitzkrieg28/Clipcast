@@ -1,5 +1,5 @@
 import { Worker,Job } from "bullmq";
-import { redisConnection,redisSubscriber } from "./src/config/redisClient.js";
+import { redisConnection } from "./src/config/redisClient.js";
 import {exec} from 'child_process';
 import cloudinary from 'cloudinary';
 import 'dotenv/config';
@@ -24,12 +24,23 @@ const processjob =async (job)=>{
 
     let tempFilename= `clip-${job.id}.mp4`;
 
+    const jobStatusKey = `job:status:${job.id}`;
+
     console.log(`processing job ${job.id} wih data:`, job.data);
     if (!videoURL || startTime === undefined || endTime === undefined || !userId) {
         
         throw new Error("Missing essential job data (videoUrl, startTime, endTime, userId)");
     }
     try{
+        await redisConnection.hset(jobStatusKey, {
+            status: "processing",
+            userId: userId,
+            jobId: job.id,
+            startTime: Date.now()
+        });
+        // Set key to expire in 1 hour (3600s)
+        await redisConnection.expire(jobStatusKey, 3600);
+
     const command= `yt-dlp -f "best[height<=480]" --download-sections "*${startTime}-${endTime}" --remux-video mp4 -o "${tempFilename}" "${videoURL}"`;
     console.log(`Executing command for job ${job.id}: ${command}`);
     await new Promise((resolve,reject)=>{
@@ -71,29 +82,32 @@ const processjob =async (job)=>{
     console.error(`!!! Cloudinary Upload Error for job ${job.id}:`, cloudinaryError);
             throw new Error(`Cloudinary upload failed: ${cloudinaryError.message || 'Unknown Cloudinary error'}`);
 }
-    const clipurl= uploadResult?.secure_url;
-    if (!clipurl) {
+    const clipUrl= uploadResult?.secure_url;
+    if (!clipUrl) {
         throw new Error("Cloudinary upload succeeded but returned no secure_url");
     }
     console.log('uploaded to cloudinary:', uploadResult.secure_url);
 
-    const notifyMessage= JSON.stringify({
-        userId: userId,
-        clipurl: clipurl,
-        jobID: job.id,
-        status: 'completed'
+    await redisConnection.hset(jobStatusKey, {
+        status: "completed",
+        clipUrl: clipUrl, // Use consistent 'clipUrl'
+        finishedAt: Date.now()
     });
-
-    await redisConnection.publish('clip-ready',notifyMessage);
-    console.log(`published completion event for job${job.id}`);
+    // Reset expiration
+    await redisConnection.expire(jobStatusKey, 3600);
     console.log(`finished job: ${job.id}`);
     return {
-        clipURL: clipurl
+        clipUrl: clipUrl
     };
 } catch(err){
     console.error(`job ${job.id} processing failed:`,err.message);
-    const failureMessage = JSON.stringify({ userId: userId, jobId: job.id, status: 'failed', error: error.message });
-    await redisConnection.publish('clip-failed', failureMessage); 
+    await redisConnection.hset(jobStatusKey, {
+        status: "failed",
+        error: err.message || 'Unknown error',
+        finishedAt: Date.now()
+    });
+    // Reset expiration
+    await redisConnection.expire(jobStatusKey, 3600);    
     throw error; 
 } finally {
     try {
