@@ -38,7 +38,6 @@ const processjob =async (job)=>{
             jobId: job.id,
             startTime: Date.now()
         });
-        // Set key to expire in 1 hour (3600s)
         await redisConnection.expire(jobStatusKey, 3600);
 
     const command= `yt-dlp -f "best[height<=480]" --download-sections "*${startTime}-${endTime}" --remux-video mp4 -o "${tempFilename}" "${videoURL}"`;
@@ -53,7 +52,7 @@ const processjob =async (job)=>{
         console.log(`yt-dlp output: ${stdout}`);
         if (!fs.existsSync(tempFilename)) {
            
-            const possibleExtensions = ['.webm', '.mkv', '.mp4']; // Add others if needed
+            const possibleExtensions = ['.webm', '.mkv', '.mp4']; 
             let found = false;
             for (const ext of possibleExtensions) {
                 const potentialFilename = `clip-${job.id}${ext}`;
@@ -90,10 +89,9 @@ const processjob =async (job)=>{
 
     await redisConnection.hset(jobStatusKey, {
         status: "completed",
-        clipUrl: clipUrl, // Use consistent 'clipUrl'
+        clipUrl: clipUrl, 
         finishedAt: Date.now()
     });
-    // Reset expiration
     await redisConnection.expire(jobStatusKey, 3600);
     console.log(`finished job: ${job.id}`);
     return {
@@ -106,7 +104,6 @@ const processjob =async (job)=>{
         error: err.message || 'Unknown error',
         finishedAt: Date.now()
     });
-    // Reset expiration
     await redisConnection.expire(jobStatusKey, 3600);    
     throw error; 
 } finally {

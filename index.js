@@ -62,26 +62,20 @@ app.get('/api/clips/status/:jobId', async (req, res) => {
     console.log(`Received status check for job: ${jobId}`);
 
     const jobStatusKey = `job:status:${jobId}`;
-    // Get all fields from the job's status hash
     const statusData = await redisConnection.hgetall(jobStatusKey);
 
     if (!statusData || Object.keys(statusData).length === 0) {
-        // If key doesn't exist, the job is not found or has expired
         return res.status(404).send({ status: 'not_found', message: 'Job not found or expired.' });
     }
 
-    // Send the current status (e.g., {"status": "processing"} or {"status": "completed", "clipUrl": "..."})
     res.status(200).send(statusData);
 
-    // If the job is finished, delete its status key from Redis to save space
     if (statusData.status === 'completed' || statusData.status === 'failed') {
         await redisConnection.del(jobStatusKey);
         console.log(`Cleaned up status key for job: ${jobId}`);
     }
 });
-// ------------------------------------
 
-// --- Basic Error Handler (Add to the end) ---
 app.use((err, req, res, next) => {
   console.error("Unhandled Error:", err.stack || err);
   if (!res.headersSent) {
