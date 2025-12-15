@@ -44,6 +44,15 @@ Most downloaders force users to download entire large files just to get a 30-sec
 ![System Architecture Diagram](./assets/archi.png)
 
 ClipCast utilizes an **Event-Driven Architecture**
+
+**The Data Flow:**
+1.  **Client Request:** The Chrome Extension identifies the user's intent (Clip vs. Playlist) and sends a lightweight HTTP payload to the Express API.
+2.  **Job Queuing:** The API validates the request and immediately offloads the task to **BullMQ (Redis)**, returning a `jobId` to the client instantly.
+3.  **Asynchronous Processing:**
+    * **Clip Worker:** Consumes `clip-queue` jobs. It spawns a child process to download the specific segment using `yt-dlp`'s download sections feature, then uploads the result to **Cloudinary**.
+    * **Playlist Worker:** Consumes `playlist-queue` jobs. It downloads the audio tracks, compresses them into a `.zip` archive using `archiver`, and serves the file directly from local storage.
+4.  **Status Polling:** The Extension polls the `/status/:jobId` endpoint every 5 seconds. Once the job status changes to `completed`, the polling stops and the download link is presented.
+
 ## <span id="key-features">✨ Key Features</span>
 ### v2.0: The Playlist Update 
 * **📦 Batch Playlist Processing:** Capable of downloading entire YouTube playlists (10+ songs) in a single job.
@@ -197,4 +206,11 @@ ClipCast requires specific environment variables to function. Create a `.env` fi
 * **Why?** * *Clips* are small and meant to be shared socially, so a Cloud URL is perfect.
     * *Playlists* are large (50MB+) and often hit the file-size limits of free cloud tiers. Serving them locally via a static route is faster, avoids API limits, and simplifies the architecture for temporary batch downloads.
 
+### 3. BullMQ & Redis for Queue Management
+* **Decision:** Decoupling the API from the Worker logic using a Message Queue.
+* **Why?** Video processing is CPU-intensive. If handled in the main Express thread, a single download would block the entire API. By offloading tasks to **BullMQ**, the API remains responsive (returning `202 Accepted` instantly) while workers churn through the heavy lifting in the background.
+
+### 4. Child Processes over Node Libraries
+* **Decision:** Spawning `yt-dlp` as a child process instead of using an npm wrapper.
+* **Why?** `yt-dlp` is constantly updated to bypass YouTube's anti-bot measures. Using the binary directly ensures I can update the core engine (`yt-dlp -U`) without waiting for an npm package maintainer to release an update.
 
