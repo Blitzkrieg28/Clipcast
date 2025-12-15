@@ -2,124 +2,119 @@ console.log("ClipCast Content Script Injected!");
 
 let clipStartTime = null;
 let clipEndTime = null;
-let selectingStart = true; 
 
+// 1. Existing Clipper UI
 function addClippingUI() {
     const playerControls = document.querySelector('.ytp-right-controls');
     if (playerControls && !document.getElementById('clipcast-controls')) {
-        console.log("Adding ClipCast UI...");
-
         const controlsContainer = document.createElement('div');
         controlsContainer.id = 'clipcast-controls';
-        controlsContainer.style.display = 'flex';
-        controlsContainer.style.alignItems = 'center';
-        controlsContainer.style.marginLeft = '10px';
+        controlsContainer.style.cssText = 'display: flex; align-items: center; margin-left: 10px;';
 
-        const startButton = document.createElement('button');
-        startButton.id = 'clipcast-start-btn';
-        startButton.innerText = 'Set Start (✂️)';
-        startButton.style.cssText = `padding: 5px 8px; margin-right: 5px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 3px;`;
-
-        const endButton = document.createElement('button');
-        endButton.id = 'clipcast-end-btn';
-        endButton.innerText = 'Set End (✂️)';
-        endButton.style.cssText = `padding: 5px 8px; margin-right: 5px; cursor: pointer; background-color: #f44336; color: white; border: none; border-radius: 3px; display: none;`; // Hidden initially
-
-        const createButton = document.createElement('button');
-        createButton.id = 'clipcast-create-btn';
-        createButton.innerText = 'Create Clip';
-        createButton.style.cssText = `padding: 5px 8px; cursor: pointer; background-color: #008CBA; color: white; border: none; border-radius: 3px; display: none;`; // Hidden initially
+        const startButton = createBtn('Set Start (✂️)', '#4CAF50');
+        const endButton = createBtn('Set End (✂️)', '#f44336');
+        endButton.style.display = 'none';
+        const createButton = createBtn('Create Clip', '#008CBA');
+        createButton.style.display = 'none';
 
         const statusDisplay = document.createElement('span');
-        statusDisplay.id = 'clipcast-status';
-        statusDisplay.style.cssText = `margin-left: 8px; font-size: 12px; color: white;`;
         statusDisplay.innerText = 'Select start point';
+        statusDisplay.style.cssText = 'margin-left: 8px; font-size: 12px; color: white;';
 
-        
         startButton.onclick = () => {
-            const videoPlayer = document.querySelector('video');
-            if (videoPlayer) {
-                clipStartTime = videoPlayer.currentTime; 
-                console.log(`Clip Start set: ${clipStartTime}`);
-                statusDisplay.innerText = `Start: ${formatTime(clipStartTime)} | Select end point`;
-                startButton.style.display = 'none'; 
-                endButton.style.display = 'inline-block'; 
+            const video = document.querySelector('video');
+            if (video) {
+                clipStartTime = video.currentTime;
+                startButton.style.display = 'none';
+                endButton.style.display = 'inline-block';
+                statusDisplay.innerText = `Start: ${formatTime(clipStartTime)}`;
             }
         };
 
-        
         endButton.onclick = () => {
-            const videoPlayer = document.querySelector('video');
-            if (videoPlayer) {
-                clipEndTime = videoPlayer.currentTime;
-                if (clipEndTime <= clipStartTime) {
-                    alert("End time must be after start time!");
-                    return;
-                }
-                console.log(`Clip End set: ${clipEndTime}`);
-                statusDisplay.innerText = `Clipping: ${formatTime(clipStartTime)} - ${formatTime(clipEndTime)}`;
+            const video = document.querySelector('video');
+            if (video) {
+                clipEndTime = video.currentTime;
+                if (clipEndTime <= clipStartTime) return alert("End must be after start!");
                 endButton.style.display = 'none';
-                createButton.style.display = 'inline-block'; 
+                createButton.style.display = 'inline-block';
+                statusDisplay.innerText = `${formatTime(clipStartTime)} - ${formatTime(clipEndTime)}`;
             }
         };
 
         createButton.onclick = () => {
-             if (clipStartTime !== null && clipEndTime !== null) {
-                const videoURL = window.location.href;
-                console.log('Sending clip data to background script:', { videoURL, startTime: clipStartTime, endTime: clipEndTime });
-
-                chrome.runtime.sendMessage({
-                    action: "createClip",
-                    data: {
-                        videoURL: videoURL,
-                        startTime: clipStartTime,
-                        endTime: clipEndTime,
-                        userId: "user123_placeholder"
-                    }
-                }, (response) => {
-                     if (chrome.runtime.lastError) {
-                        console.error("Error sending message:", chrome.runtime.lastError.message);
-                        statusDisplay.innerText = "Error sending request.";
-                     } else {
-                        console.log("Background script response:", response);
-                        statusDisplay.innerText = "Clip request sent! Processing...";
-                     }
-                });
-
-                resetClippingState(startButton, endButton, createButton, statusDisplay);
-             }
+            const videoURL = window.location.href;
+            chrome.runtime.sendMessage({
+                action: "createClip",
+                data: { videoURL, startTime: clipStartTime, endTime: clipEndTime }
+            });
+            statusDisplay.innerText = "Sent!";
+            setTimeout(() => {
+                startButton.style.display = 'inline-block';
+                createButton.style.display = 'none';
+                statusDisplay.innerText = 'Select start point';
+            }, 2000);
         };
 
-        controlsContainer.appendChild(startButton);
-        controlsContainer.appendChild(endButton);
-        controlsContainer.appendChild(createButton);
-        controlsContainer.appendChild(statusDisplay);
-
+        controlsContainer.append(startButton, endButton, createButton, statusDisplay);
         playerControls.prepend(controlsContainer);
-        console.log("ClipCast UI added!");
     }
 }
 
-function resetClippingState(startButton, endButton, createButton, statusDisplay) {
-    clipStartTime = null;
-    clipEndTime = null;
-    startButton.style.display = 'inline-block';
-    endButton.style.display = 'none';
-    createButton.style.display = 'none';
-    statusDisplay.innerText = 'Select start point';
-}
+// 2. New Playlist UI
+function addPlaylistUI() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const listId = urlParams.get('list');
+    if (!listId) return;
 
-function formatTime(totalSeconds) {
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = Math.floor(totalSeconds % 60);
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-}
+    // Try finding the header (Playlist page) or sidebar (Watch page)
+    const header = document.querySelector('ytd-playlist-header-renderer .metadata-action-bar') || 
+                   document.querySelector('ytd-playlist-panel-renderer #header-contents');
 
+    if (header && !document.getElementById('clipcast-playlist-btn')) {
+        const btn = document.createElement('button');
+        btn.id = 'clipcast-playlist-btn';
+        btn.innerText = '⬇️ Download Playlist';
+        btn.style.cssText = `margin-left: 10px; padding: 6px 12px; background: #ff0050; color: white; border: none; border-radius: 15px; cursor: pointer; font-weight: bold; font-size: 13px; z-index: 9999;`;
 
-
-const checkInterval = setInterval(() => {
-    if (document.querySelector('.ytp-right-controls')) {
-        addClippingUI();
-       
+        btn.onclick = () => {
+            btn.innerText = '⏳ Queuing...';
+            btn.disabled = true;
+            btn.style.background = '#ccc';
+            
+            chrome.runtime.sendMessage({
+                action: "downloadPlaylist",
+                data: { playlistUrl: window.location.href }
+            }, (res) => {
+                if (chrome.runtime.lastError || !res?.success) {
+                    btn.innerText = '❌ Error';
+                } else {
+                    btn.innerText = '✅ Started!';
+                }
+                setTimeout(() => {
+                    btn.innerText = '⬇️ Download Playlist';
+                    btn.disabled = false;
+                    btn.style.background = '#ff0050';
+                }, 3000);
+            });
+        };
+        header.appendChild(btn);
     }
-}, 2000); 
+}
+
+// Helper
+function createBtn(text, color) {
+    const b = document.createElement('button');
+    b.innerText = text;
+    b.style.cssText = `padding: 5px 8px; margin-right: 5px; cursor: pointer; background-color: ${color}; color: white; border: none; border-radius: 3px;`;
+    return b;
+}
+function formatTime(s) {
+    return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`;
+}
+
+// Loop
+setInterval(() => {
+    if (document.querySelector('.ytp-right-controls')) addClippingUI();
+    if (window.location.search.includes('list=')) addPlaylistUI();
+}, 2000);

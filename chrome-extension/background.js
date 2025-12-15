@@ -39,9 +39,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
     if (request.action === "createClip") {
         handleCreateClip(request.data, sendResponse);
-        return true; // Keep message port open for async response
+        return true; 
     }
-    // *** REMOVED: 'clipReady' and 'clipFailed' listeners (now handled by polling) ***
+    // --- NEW LISTENER ---
+    if (request.action === "downloadPlaylist") {
+        handleDownloadPlaylist(request.data, sendResponse);
+        return true;
+    }
 });
 
 // B. Listen for Notification Clicks
@@ -121,64 +125,81 @@ async function handleCreateClip(data, sendResponse) {
         });
     }
 }
+async function handleDownloadPlaylist(data, sendResponse) {
+    const { playlistUrl } = data;
+    if (!currentUserId) await ensureUserId();
 
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/playlist`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playlistUrl, userId: currentUserId })
+        });
+
+        const resData = await response.json();
+        
+        if (response.ok) {
+            sendResponse({ success: true, message: "Playlist queued!" });
+            
+            // Re-use the SAME polling function!
+            pollForJobStatus(resData.jobId, currentUserId); 
+        } else {
+            throw new Error(resData.message);
+        }
+    } catch (error) {
+        console.error("Playlist Error:", error);
+        sendResponse({ success: false, message: error.message });
+    }
+}
 // *** 5. NEW: Polling Function ***
 function pollForJobStatus(jobId, userId) {
-    const statusUrl = `${API_BASE_URL}/api/clips/status/${jobId}`;
+    const statusUrl = `${API_BASE_URL}/api/clips/status/${jobId}`; // We reuse the status endpoint
 
     const pollInterval = setInterval(async () => {
-        console.log(`Polling for job status: ${jobId}`);
         try {
             const response = await fetch(statusUrl);
             if (!response.ok) {
-                // 404 means job not found or already cleaned up
-                if(response.status === 404) {
-                    console.warn(`Polling for job ${jobId} got 404. Stopping poll.`);
-                    clearInterval(pollInterval);
-                    return;
-                }
-                console.warn(`Polling failed for job ${jobId}, status: ${response.status}`);
-                return; // Keep polling
+                if(response.status === 404) clearInterval(pollInterval);
+                return;
             }
 
             const data = await response.json();
-            console.log(`Poll status for job ${jobId}:`, data.status);
-
-            // Safety check: ensure this job belongs to the current user
+            
             if (data.userId !== userId) {
-                console.error(`Mismatched user ID for job ${jobId}. Stopping poll.`);
                 clearInterval(pollInterval);
                 return;
             }
 
             if (data.status === 'completed') {
-                clearInterval(pollInterval); // Stop polling
+                clearInterval(pollInterval);
+                
+                // --- CHANGED HERE: Handle both clipUrl (Video) and downloadUrl (Playlist) ---
+                const finalUrl = data.clipUrl || data.downloadUrl;
+                const title = data.downloadUrl ? "Playlist Ready!" : "Clip Ready!";
+                const msg = data.downloadUrl ? "Click to download your ZIP." : "Click to view your clip.";
+
                 const notificationId = `clip-success-${jobId}`;
                 chrome.notifications.create(notificationId, {
                     type: 'basic',
                     iconUrl: 'images/icon16.png',
-                    title: 'Clip Ready!',
-                    message: 'Your clip is ready! Click to view.',
-                    contextMessage: data.clipUrl
+                    title: title,
+                    message: msg,
                 });
-                chrome.storage.local.set({ [notificationId]: data.clipUrl });
+                chrome.storage.local.set({ [notificationId]: finalUrl });
 
             } else if (data.status === 'failed') {
-                clearInterval(pollInterval); // Stop polling
+                clearInterval(pollInterval);
                 chrome.notifications.create(`clip-fail-${jobId}`, {
                     type: 'basic',
                     iconUrl: 'images/icon16.png',
-                    title: 'Clip Failed',
-                    message: `Failed to create clip. Error: ${data.error || 'Unknown error'}`
+                    title: 'Job Failed',
+                    message: `Error: ${data.error || 'Unknown error'}`
                 });
             }
-            // If status is 'processing', do nothing and let it poll again
-            
         } catch (error) {
-            console.error(`Error during polling for job ${jobId}:`, error);
-            // Don't clear interval, just let it try again next time
+            console.error(`Polling error:`, error);
         }
-    }, 5000); // Poll every 5 seconds
+    }, 5000);
 }
 // ----------------------------
 

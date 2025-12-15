@@ -19,6 +19,7 @@
   "author": "blitzkrieg28",
   "license": "ISC",
   "dependencies": {
+    "archiver": "^7.0.1",
     "bullmq": "^5.61.2",
     "cloudinary": "^2.8.0",
     "cors": "^2.8.5",
